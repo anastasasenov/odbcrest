@@ -271,7 +271,15 @@ void _free_Stmt(TStmt * p) {
         
         _free_BindRec( p->m_pBindRec );
         _free_DescRec( p->m_pDescRec );
-        
+
+        if ( p->m_pBindRec ) {
+            free( p->m_pBindRec );
+        }
+
+        if ( p->m_pDescRec ) {
+            free( p->m_pDescRec );
+        }
+
         if ( p->m_pJsonObj ) {
             json_object_put( p->m_pJsonObj );
         }
