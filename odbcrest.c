@@ -1464,13 +1464,13 @@ SQLRETURN SQL_API SQLPrepare(
     SQLCHAR *StatementText,
     SQLINTEGER TextLength) {
 
-    SQLRETURN nRet = SQL_ERROR;
+    SQLRETURN nRet = SQL_INVALID_HANDLE;
 
-    (void)StatementHandle; /** @unused */
-    (void)StatementText; /** @unused */
-    (void)TextLength; /** @unused */
+    TStmt* pStmt = (TStmt*)StatementHandle;
+    if ( pStmt && StatementText ) {
 
-    nRet = SQL_SUCCESS; /** nop */
+        nRet = _find_and_describe_tbl(pStmt, StatementText, TextLength);
+    }
 
     ODBCREST_PRINT( "SQLPrepare(%p)->%d", StatementHandle, nRet )
 
@@ -1775,6 +1775,8 @@ SQLRETURN SQL_API SQLExecute(
     SQLRETURN nRet = SQL_ERROR;
 
     (void)StatementHandle; /** @unused */
+
+    nRet = SQL_SUCCESS; /** nop */
 
     ODBCREST_PRINT( "SQLExecute(%p)->%d", StatementHandle, nRet )
 
