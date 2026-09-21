@@ -1154,7 +1154,8 @@ SQLRETURN SQL_API SQLFetch(
 
     TStmt* pStmt = (TStmt*)StatementHandle;
     if ( pStmt ) {
-        
+
+        unsigned uRecNo = pStmt->m_uRecNo;
         if ( ODBCREST_STMT_TABLES == pStmt->m_nStmt ) {
 
             nRet = _fetch_tables( pStmt, true );
@@ -1166,6 +1167,10 @@ SQLRETURN SQL_API SQLFetch(
         } else {
             
             nRet = _fetch_tbl( pStmt, true );
+        }
+
+        if ( SQL_SUCCESS != nRet ) {
+             pStmt->m_uRecNo = uRecNo;
         }
     }
 
