@@ -18,14 +18,15 @@
 #define ODBCREST_STMT_COLUMNS (-2)
 
 /** env-var for configuraion */
-#define ODBCREST_CFG      "odbcrest.ini"
-#define ODBCREST_ENV      "ODBCREST_INI"
-#define ODBCREST_DEFAULT  ""
-#define ODBCREST_TABLE    "table%d"
-#define ODBCREST_NAME     "name"
-#define ODBCREST_JSONID   "jsonid%d"
-#define ODBCREST_URL      "url"
-#define ODBCREST_HEADER   "header%d"
+#define ODBCREST_CFG       "odbcrest.ini"
+#define ODBCREST_ENV       "ODBCREST_INI"
+#define ODBCREST_DEFAULT   ""
+#define ODBCREST_TABLE     "table%d"
+#define ODBCREST_NAME      "name"
+#define ODBCREST_JSONID    "jsonid%d"
+#define ODBCREST_JSONARRAY "jsonarray"
+#define ODBCREST_URL       "url"
+#define ODBCREST_HEADER    "header%d"
 
 /** (char*) <-> (unsigned char*) */
 #define TO_SQL(str) ((SQLCHAR*)(str))
@@ -437,10 +438,12 @@ struct json_object* _fetch_json(TStmt * pStmt) {
         int uPosHdr = 0;
         char szHdr[ODBCREST_BUFSIZ];
         char szHdrValue[ODBCREST_BUFSIZ];
+        char szArrayId[ODBCREST_BUFSIZ];
 
         curl_easy_setopt(pHCurl, CURLOPT_URL, szUrl);
         curl_easy_setopt(pHCurl, CURLOPT_WRITEFUNCTION, _curl_cb);
         curl_easy_setopt(pHCurl, CURLOPT_WRITEDATA, (void *)&buf);
+        _get_ini_val( szSection, ODBCREST_JSONARRAY, szArrayId, sizeof(szArrayId) - 1);
         
         while ( true ) {
             
@@ -460,6 +463,9 @@ struct json_object* _fetch_json(TStmt * pStmt) {
         if ( pHCurl && ( CURLE_OK == curl_easy_perform(pHCurl) ) ) {
 
             pRet = json_tokener_parse( buf.m_pData );
+            if ( pRet && strlen(szArrayId) ) {
+                json_object_object_get_ex(pRet, szArrayId, &pRet);
+            }
         }
     }
 
