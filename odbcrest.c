@@ -630,6 +630,7 @@ SQLRETURN _fetch_columns(TStmt * pStmt, bool bInc) {
     char szTblName[ODBCREST_BUFSIZ];
     char szKey[ODBCREST_BUFSIZ];
     char szColName[ODBCREST_BUFSIZ];
+    unsigned uRecNo = 0;
     int nPosTbl = 1;
 
     if ( bInc ) {
@@ -647,13 +648,13 @@ SQLRETURN _fetch_columns(TStmt * pStmt, bool bInc) {
         }
         
         while ( true ) {
-            
+
             sprintf(szKey, ODBCREST_JSONID, nPosCol++ );
             if ( ! _get_ini_val( szSection, szKey, szColName, sizeof(szColName) - 1) ) {
                 break;
             }
-            
-            if ( (nPosCol - 1) == pStmt->m_uRecNo ) {
+
+            if ( ++uRecNo == pStmt->m_uRecNo ) {
 
                 if ( pStmt->m_pBindRec && pStmt->m_pBindRec->m_pBinding ) {
                 
