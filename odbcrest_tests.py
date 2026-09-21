@@ -28,6 +28,12 @@ def setup():
     f.write("jsonid1=col1\n")
     f.write("jsonid2=col2\n")
     f.write("jsonid3=col3\n")
+    f.write("\n[table2]\n")
+    f.write("name=guests\n")
+    f.write(f"url=http://{HOST}:{PORT}/guest\n")
+    f.write("jsonarray=results\n")
+    f.write("jsonid1=id\n")
+    f.write("jsonid2=name\n")
     f.close()
    
 def open_connection(connection_string):
@@ -53,12 +59,23 @@ async def handle_data(request):
     ]
     return web.json_response(data)
 
+async def handle_guest(request):
+    data = {
+        "results" : [
+            {"id": "1001", "name": "Jon Andersen"},
+            {"id": "1002", "name": "Alice"},
+            {"id": "1003", "name": "Teddy Bear"}
+        ]
+    }
+    return web.json_response(data)
+
 def start_rest_srv(host, port):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     app = web.Application()
     app.router.add_get('/data', handle_data)
+    app.router.add_get('/guest', handle_guest)
     
     runner = web.AppRunner(app)
     loop.run_until_complete(runner.setup())
@@ -139,6 +156,26 @@ def test4():
     finally:
         close_connection(conn)
 
+def test5():
+    print("Test 5: read table 'guests' (array id) ...", end = ' ')
+    try:
+        conn = open_connection(connection_string)
+        cursor = conn.cursor()
+        query = f"SELECT * FROM guests;" 
+        cursor.execute(query)
+        rows = cursor.fetchall()      
+        if not rows:
+            assert False, "The table is empty"
+        else:
+            print("{", end = ' ')
+            for row in rows:
+                print(row, end = ' ')
+            print("} ... OK")
+    except pyodbc.Error as ex:
+        assert False, f"Connection failed: {get_odbc_error(ex)}"
+    finally:
+        close_connection(conn)
+
 if __name__ == "__main__":
     api_thread = threading.Thread(target=start_rest_srv, args=(HOST, PORT), daemon=True)
     api_thread.start()
@@ -148,4 +185,5 @@ if __name__ == "__main__":
     test2()
     test3()
     test4()
+    test5()
 
