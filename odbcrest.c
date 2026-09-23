@@ -86,6 +86,7 @@ typedef struct {
     TDescRec* m_pDescRec;
     struct json_object * m_pJsonObj;
     struct json_object * m_pJsonRes;
+    char m_szErrMsg[ODBCREST_BUFSIZ];
 
 } TStmt;
 
@@ -264,6 +265,7 @@ void _init_Stmt(TStmt * p) {
         p->m_pDescRec = NULL;
         p->m_pJsonObj = NULL;
         p->m_pJsonRes = NULL;
+        p->m_szErrMsg[0] = 0;
     }
 }
 
@@ -445,6 +447,7 @@ struct json_object* _fetch_json(TStmt * pStmt) {
     if ( _get_ini_val( szSection, ODBCREST_URL, szUrl, sizeof(szUrl) - 1) ) {
 
         int uPosHdr = 0;
+        CURLcode res;
         char szHdr[ODBCREST_BUFSIZ];
         char szHdrValue[ODBCREST_BUFSIZ];
         char szArrayId[ODBCREST_BUFSIZ];
@@ -469,7 +472,8 @@ struct json_object* _fetch_json(TStmt * pStmt) {
             curl_easy_setopt(pHCurl, CURLOPT_HTTPHEADER, pHdr);
         }
         
-        if ( pHCurl && ( CURLE_OK == curl_easy_perform(pHCurl) ) ) {
+        res = curl_easy_perform(pHCurl);
+        if ( pHCurl && ( CURLE_OK == res ) ) {
 
             pStmt->m_pJsonObj = json_tokener_parse( buf.m_pData ); /** to free */
             pRet = pStmt->m_pJsonObj;
@@ -478,6 +482,12 @@ struct json_object* _fetch_json(TStmt * pStmt) {
                 json_object_object_get_ex(pRet, szArrayId, &pRet);
             }
             pStmt->m_pJsonRes = pRet;
+        }
+        
+        if ( pHCurl && ( CURLE_OK != res ) ) {
+
+            strncpy( pStmt->m_szErrMsg, curl_easy_strerror(res), ODBCREST_BUFSIZ - 2 );
+            pStmt->m_szErrMsg[ ODBCREST_BUFSIZ - 2 ] = 0;
         }
     }
 
@@ -520,7 +530,7 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
     }
 
     if ( pJsonObj ) {
-        
+
         if (json_object_get_type( pJsonObj ) == json_type_array) {
 
             unsigned uIdx = (pStmt->m_uRecNo - 1);
@@ -1081,6 +1091,15 @@ SQLRETURN SQL_API SQLExecDirect(
     if ( pStmt && StatementText ) {
 
         nRet = _find_and_describe_tbl(pStmt, StatementText, TextLength);
+        if ( pStmt->m_nStmt > 0 ) {
+            
+            if ( _fetch_json( pStmt ) ) {
+                nRet = SQL_SUCCESS;
+            } else {
+                nRet = SQL_ERROR;
+            }
+            pStmt->m_uRecNo = 0;
+        }
     }
 
     ODBCREST_PRINT( "SQLExecDirect(%p)->%d", StatementHandle, nRet )
@@ -1774,16 +1793,43 @@ SQLRETURN SQL_API SQLGetDiagRec(
 
     SQLRETURN nRet = SQL_ERROR;
 
-    (void)HandleType; /** @unused */
-    (void)Handle; /** @unused */
-    (void)RecNumber; /** @unused */
-    (void)Sqlstate; /** @unused */
-    (void)NativeError; /** @unused */
-    (void)MessageText; /** @unused */
-    (void)BufferLength; /** @unused */
-    (void)TextLength; /** @unused */
+    if (SQL_HANDLE_STMT == HandleType) {
+        
+        TStmt* pStmt = (TStmt*)Handle;
+        if ( pStmt && MessageText && strlen(pStmt->m_szErrMsg) ) {
+    
+            if ( 1 == RecNumber ) {
 
-    ODBCREST_PRINT( "SQLGetDiagField(%d,%p)->%d", HandleType, Handle, nRet )
+                SQLINTEGER nBufferLength = BufferLength;
+                SQLINTEGER nStringLength;
+                _psz_convert(
+                    MessageText,
+                    pStmt->m_szErrMsg,
+                    nBufferLength,
+                    &nStringLength);
+
+                if ( TextLength ) {
+                    *TextLength = nStringLength;
+                }
+
+                if ( Sqlstate ) {
+                    strcpy(TO_CHAR(Sqlstate), "00001");
+                }
+
+                if ( NativeError ) {
+                    *NativeError = 1;
+                }
+
+                nRet = SQL_SUCCESS;
+
+            } else {
+
+                nRet = SQL_NO_DATA;
+            }
+        }
+    }
+
+    ODBCREST_PRINT( "SQLGetDiagRec(%d,%p,%d)->%d", HandleType, Handle, RecNumber, nRet )
 
     return nRet;
 }
@@ -1811,9 +1857,22 @@ SQLRETURN SQL_API SQLExecute(
 
     SQLRETURN nRet = SQL_ERROR;
 
-    (void)StatementHandle; /** @unused */
+    TStmt* pStmt = (TStmt*)StatementHandle;
+    if ( pStmt ) {
 
-    nRet = SQL_SUCCESS; /** nop */
+        if ( pStmt->m_nStmt > 0 ) {
+            
+            if ( _fetch_json( pStmt ) ) {
+
+                pStmt->m_uRecNo = 0;
+                nRet = SQL_SUCCESS;
+            }
+
+        } else {
+
+            nRet = SQL_SUCCESS; /** nop */
+        }
+    }
 
     ODBCREST_PRINT( "SQLExecute(%p)->%d", StatementHandle, nRet )
 
@@ -2473,12 +2532,29 @@ SQLRETURN SQL_API SQLError(
 
     (void)EnvironmentHandle; /** @unused */
     (void)ConnectionHandle; /** @unused */
-    (void)StatementHandle; /** @unused */
     (void)Sqlstate; /** @unused */
     (void)NativeError; /** @unused */
-    (void)MessageText; /** @unused */
-    (void)BufferLength; /** @unused */
-    (void)TextLength; /** @unused */
+
+    TStmt* pStmt = (TStmt*)StatementHandle;
+    if ( pStmt ) {
+
+        unsigned uLen = strlen(pStmt->m_szErrMsg);
+        if ( uLen ) {
+
+            SQLINTEGER nBufferLength = BufferLength;
+            SQLINTEGER* pStringLengthPtr = NULL;
+
+            _psz_convert(
+                MessageText,
+                pStmt->m_szErrMsg,
+                nBufferLength,
+                pStringLengthPtr);
+
+            if ( TextLength ) {
+                *TextLength = (SQLSMALLINT)(*pStringLengthPtr);
+            }
+        }
+    }
 
     ODBCREST_PRINT( "SQLError(%p,%p,%p)->%d", EnvironmentHandle, ConnectionHandle, StatementHandle, nRet )
 
@@ -2801,5 +2877,4 @@ SQLRETURN SQL_API SQLEndTran(
 
     return nRet;
 }
-
 
