@@ -327,6 +327,13 @@ size_t _ustr_to_psz(
 
     size_t nRet = 0;
 
+    if ( SQL_NTS == nUStrLength ) {
+
+        nUStrLength = 0;
+        while ( pUStr[ nUStrLength ])
+            nUStrLength ++;
+    }
+    
     if ( nStrLength > 0 ) {
 
         *pszStr = 0;
