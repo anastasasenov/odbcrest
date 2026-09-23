@@ -1115,9 +1115,14 @@ SQLRETURN SQL_API SQLNumResultCols(
     SQLRETURN nRet = SQL_INVALID_HANDLE;
 
     TStmt* pStmt = (TStmt*)StatementHandle;
-    if ( pStmt && pStmt->m_pDescRec ) {
+    if ( pStmt ) {
 
-        *ColumnCountPtr = pStmt->m_pDescRec->m_uNumOfDesc;
+        *ColumnCountPtr = 0;
+
+        if ( pStmt->m_pDescRec ) {
+            *ColumnCountPtr = pStmt->m_pDescRec->m_uNumOfDesc;
+        }
+
         nRet = SQL_SUCCESS;
     }
 
@@ -1846,7 +1851,29 @@ SQLRETURN SQL_API SQLFetchScroll(
     (void)FetchOrientation; /** @unused */
     (void)FetchOffset; /** @unused */
 
-    ODBCREST_PRINT( "SQLFetchScroll(%p)->%d", StatementHandle, nRet )
+    TStmt* pStmt = (TStmt*)StatementHandle;
+    if ( pStmt && (1 == FetchOrientation) && (1 == FetchOffset) ) {
+
+        unsigned uRecNo = pStmt->m_uRecNo;
+        if ( ODBCREST_STMT_TABLES == pStmt->m_nStmt ) {
+
+            nRet = _fetch_tables( pStmt, true );
+            
+        } else if ( ODBCREST_STMT_COLUMNS == pStmt->m_nStmt ) {
+
+            nRet = _fetch_columns( pStmt, true );
+
+        } else {
+            
+            nRet = _fetch_tbl( pStmt, true );
+        }
+
+        if ( SQL_SUCCESS != nRet ) {
+             pStmt->m_uRecNo = uRecNo;
+        }
+    }
+
+    ODBCREST_PRINT( "SQLFetchScroll(%p,%d,%ld)->%d", StatementHandle, FetchOrientation, FetchOffset, nRet )
 
     return nRet;
 }
@@ -2064,10 +2091,6 @@ SQLRETURN SQL_API SQLGetInfo(
     SQLRETURN nRet = SQL_ERROR;
 
     (void)ConnectionHandle; /** @unused */
-    (void)InfoType; /** @unused */
-    (void)InfoValue; /** @unused */
-    (void)BufferLength; /** @unused */
-    (void)StringLength; /** @unused */
     
     if ( (SQL_DRIVER_ODBC_VER == InfoType) && (BufferLength > 4) ) {
 
@@ -2101,6 +2124,40 @@ SQLRETURN SQL_API SQLGetInfo(
         *((SQLUINTEGER*)InfoValue) = 0;
         *StringLength = sizeof(SQLUINTEGER);
         nRet = SQL_SUCCESS;
+
+    /*} else if ( SQL_OWNER_USAGE == InfoType ) {
+
+        *((SQLSMALLINT*)InfoValue) = 0;
+        *StringLength = sizeof(SQLSMALLINT);
+        nRet = SQL_SUCCESS;
+
+    } else if ( SQL_QUALIFIER_USAGE == InfoType ) {
+
+        *((SQLSMALLINT*)InfoValue) = 0;
+        *StringLength = sizeof(SQLSMALLINT);
+        nRet = SQL_SUCCESS;
+
+    } else if ( SQL_QUOTED_IDENTIFIER_CASE == InfoType ) {
+
+        *((SQLSMALLINT*)InfoValue) = SQL_IC_UPPER;
+        *StringLength = sizeof(SQLSMALLINT);
+        nRet = SQL_SUCCESS;
+
+    } else if ( SQL_CATALOG_NAME_SEPARATOR == InfoType ) {
+
+        *((SQLUINTEGER*)InfoValue) = '.';
+        *StringLength = sizeof(SQLUINTEGER);
+        nRet = SQL_SUCCESS;
+
+    } else if ( SQL_IDENTIFIER_QUOTE_CHAR == InfoType ) {
+
+
+        *((SQLUINTEGER*)InfoValue) = '\'';
+        *StringLength = sizeof(SQLUINTEGER);
+        nRet = SQL_SUCCESS;
+
+    */} else {
+        nRet = SQL_SUCCESS; /** default */
     }
 
     ODBCREST_PRINT( "SQLGetInfo(%p,%d)->%d", ConnectionHandle, InfoType, nRet )
@@ -2287,7 +2344,15 @@ SQLRETURN SQL_API SQLFreeStmt(
     if ( SQL_CLOSE == Option ) {
 
         /** drop select results */
-        _free_Stmt((TStmt*) StatementHandle);
+        /*_free_Stmt((TStmt*) StatementHandle);*/
+        TStmt* pStmt = (TStmt*)StatementHandle;
+        if ( pStmt ) {
+            if ( pStmt->m_pJsonObj ) {
+                json_object_put( pStmt->m_pJsonObj );
+            }
+            pStmt->m_pJsonObj = NULL;
+            pStmt->m_pJsonRes = NULL;
+        }
         nRet = SQL_SUCCESS;
 
     } else if ( SQL_DROP == Option  ) {
@@ -2351,10 +2416,15 @@ SQLRETURN SQL_API SQLNumParams(
 
     SQLRETURN nRet = SQL_ERROR;
 
-    (void)hstmt; /** @unused */
-    (void)pcpar; /** @unused */
+    TStmt* pStmt = (TStmt*)hstmt;
+    if ( pStmt ) {
+        
+        *pcpar = 0;
 
-    ODBCREST_PRINT( "SQLNumParams(%p)->%d", hstmt, nRet )
+        nRet = SQL_SUCCESS;
+    }
+
+    ODBCREST_PRINT( "SQLNumParams(%p,%d)->%d", hstmt, *pcpar, nRet )
 
     return nRet;
 }
@@ -2453,6 +2523,8 @@ SQLRETURN SQL_API SQLGetStmtAttr(
     } else if ( SQL_ATTR_IMP_PARAM_DESC == Attribute ) {
 
         nRet = SQL_SUCCESS;
+    } else {
+        nRet = SQL_SUCCESS; /** default */
     }
 
     ODBCREST_PRINT( "SQLGetStmtAttr(%p,%d)->%d", StatementHandle, Attribute, nRet )
@@ -2817,6 +2889,8 @@ SQLRETURN SQL_API SQLSetStmtAttr(
     (void)Attribute; /** @unused */
     (void)Value; /** @unused */
     (void)StringLength; /** @unused */
+
+    nRet = SQL_SUCCESS; /** nop */
  
     ODBCREST_PRINT( "SQLSetStmtAttr(%p)->%d", StatementHandle, nRet )
 
