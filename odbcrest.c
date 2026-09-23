@@ -85,6 +85,7 @@ typedef struct {
     TBindRec* m_pBindRec;
     TDescRec* m_pDescRec;
     struct json_object * m_pJsonObj;
+    struct json_object * m_pJsonRes;
 
 } TStmt;
 
@@ -262,6 +263,7 @@ void _init_Stmt(TStmt * p) {
         p->m_pBindRec = NULL;
         p->m_pDescRec = NULL;
         p->m_pJsonObj = NULL;
+        p->m_pJsonRes = NULL;
     }
 }
 
@@ -326,14 +328,14 @@ size_t _ustr_to_psz(
     SQLINTEGER nUStrLength) {
 
     size_t nRet = 0;
-
+    
     if ( SQL_NTS == nUStrLength ) {
 
         nUStrLength = 0;
         while ( pUStr[ nUStrLength ])
             nUStrLength ++;
     }
-    
+
     if ( nStrLength > 0 ) {
 
         *pszStr = 0;
@@ -469,10 +471,13 @@ struct json_object* _fetch_json(TStmt * pStmt) {
         
         if ( pHCurl && ( CURLE_OK == curl_easy_perform(pHCurl) ) ) {
 
-            pRet = json_tokener_parse( buf.m_pData );
+            pStmt->m_pJsonObj = json_tokener_parse( buf.m_pData ); /** to free */
+            pRet = pStmt->m_pJsonObj;
             if ( pRet && strlen(szArrayId) ) {
+
                 json_object_object_get_ex(pRet, szArrayId, &pRet);
             }
+            pStmt->m_pJsonRes = pRet;
         }
     }
 
@@ -498,10 +503,15 @@ static
 SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
     
     SQLRETURN nRet = SQL_NO_DATA;
+    struct json_object* pJsonObj = NULL;
 
-    if ( ! pStmt->m_pJsonObj ) {
+    if ( pStmt->m_pJsonRes ) {
 
-        pStmt->m_pJsonObj = _fetch_json( pStmt );
+        pJsonObj = pStmt->m_pJsonRes;
+
+    } else {
+
+        pJsonObj = _fetch_json( pStmt );
     }
 
     if ( bInc ) {
@@ -509,18 +519,18 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
         (pStmt->m_uRecNo) ++; /** 1st */
     }
 
-    if ( pStmt->m_pJsonObj ) {
-
-        if (json_object_get_type( pStmt->m_pJsonObj ) == json_type_array) {
+    if ( pJsonObj ) {
+        
+        if (json_object_get_type( pJsonObj ) == json_type_array) {
 
             unsigned uIdx = (pStmt->m_uRecNo - 1);
-            size_t nArrayLen = json_object_array_length( pStmt->m_pJsonObj );
-            
+            size_t nArrayLen = json_object_array_length( pJsonObj );
+
             if ( uIdx < nArrayLen ) {
 
                 struct json_object * pRecObj =
-                    json_object_array_get_idx(pStmt->m_pJsonObj, uIdx);
-                
+                    json_object_array_get_idx(pJsonObj, uIdx);
+
                 if ( pStmt->m_pBindRec && pStmt->m_pBindRec->m_pBinding ) {
                 
                     for ( unsigned i = 0; i < pStmt->m_pBindRec->m_uNumOfBind; i ++ ) {
@@ -2791,4 +2801,5 @@ SQLRETURN SQL_API SQLEndTran(
 
     return nRet;
 }
+
 
