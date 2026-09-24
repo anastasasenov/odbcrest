@@ -2746,6 +2746,8 @@ SQLRETURN SQL_API SQLCloseCursor(
 
     (void)StatementHandle; /** @unused */
 
+    nRet = SQL_SUCCESS; /** nop */
+
     ODBCREST_PRINT( "SQLCloseCursor(%p)->%d", StatementHandle, nRet )
 
     return nRet;
