@@ -356,6 +356,37 @@ size_t _ustr_to_psz(
     return nRet;
 }
 
+static
+bool _is_select_from_tbl(const char* pszStmt, const char* pszTbl) {
+    
+    bool bRet = false;
+
+    if ( strlen(pszStmt) < ODBCREST_BUFSIZ) {
+
+        char szStmt[ODBCREST_BUFSIZ];
+
+        /** select * from tbl */
+        strcpy(szStmt, pszStmt);
+        if ( strstr(szStmt, pszTbl) != NULL ) {
+
+            char szTable[ODBCREST_BUFSIZ];
+            const char szDelimiters[] = "; \t\n";
+            char *token = strtok(szStmt, szDelimiters);
+
+            szTable[ 0 ] = 0;
+            while (token != NULL) {
+
+                strcpy(szTable, token);
+                token = strtok(NULL, szDelimiters);
+            }
+
+            bRet = ( 0 == strcmp(szTable, pszTbl) );
+        }
+    }
+    
+    return bRet;
+}
+
 static 
 SQLRETURN _find_and_describe_tbl(TStmt * pStmt, SQLCHAR* psUstr, SQLINTEGER nLen) {
     
@@ -377,8 +408,7 @@ SQLRETURN _find_and_describe_tbl(TStmt * pStmt, SQLCHAR* psUstr, SQLINTEGER nLen
                 break;
             }
 
-            /** select * from tbl - there no statement validation !!! */
-            if ( strstr(szStmt, szName) != NULL ) {
+            if ( _is_select_from_tbl(szStmt, szName) ) {
 
                 int nPosCol = 0;
                 char szKey[ODBCREST_BUFSIZ];
