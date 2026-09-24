@@ -500,7 +500,19 @@ struct json_object* _fetch_json(TStmt * pStmt) {
         
         curl_slist_free_all( pHdr );
     }
-    
+
+    if ( ! pRet && buf.m_pData ) {
+
+        unsigned uLen = 0;
+
+        strcpy( pStmt->m_szErrMsg, "FAILED TO PARSE " );
+        uLen = strlen(pStmt->m_szErrMsg);
+        strncpy( pStmt->m_szErrMsg + uLen,
+                    buf.m_pData,
+                    ODBCREST_BUFSIZ - uLen -2 );
+        pStmt->m_szErrMsg[ ODBCREST_BUFSIZ - uLen - 2 ] = 0;
+    }
+
     if ( buf.m_pData ) {
 
         free( buf.m_pData );
@@ -513,6 +525,7 @@ static
 SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
     
     SQLRETURN nRet = SQL_NO_DATA;
+    bool bExtract = false;
     struct json_object* pJsonObj = NULL;
 
     if ( pStmt->m_pJsonRes ) {
@@ -573,6 +586,7 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
                                     json_object_get_string(pObj), 
                                     pBinding->m_uBufferLength, 
                                     NULL);
+                                bExtract = ( nLen > 0 );
                             }
                         }
                         
@@ -585,6 +599,20 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
 
                 nRet = SQL_SUCCESS;
             }
+        }
+    }
+
+    if ( ! bExtract ) {
+
+        nRet = SQL_ERROR;
+        strcpy( pStmt->m_szErrMsg, "FAILED TO EXTRACT " );
+        if ( pJsonObj ) {
+            
+            unsigned uLen = strlen(pStmt->m_szErrMsg);
+            strncpy( pStmt->m_szErrMsg + uLen,
+                     json_object_get_string(pJsonObj),
+                     ODBCREST_BUFSIZ - uLen -2 );
+            pStmt->m_szErrMsg[ ODBCREST_BUFSIZ - uLen - 2 ] = 0;
         }
     }
 
