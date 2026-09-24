@@ -586,7 +586,9 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
                                     json_object_get_string(pObj), 
                                     pBinding->m_uBufferLength, 
                                     NULL);
-                                bExtract = ( nLen > 0 );
+                                if ( ! bExtract ) {
+                                    bExtract = true;
+                                }
                             }
                         }
                         
@@ -602,7 +604,7 @@ SQLRETURN _fetch_tbl(TStmt * pStmt, bool bInc) {
         }
     }
 
-    if ( ! bExtract ) {
+    if ( ! bExtract && ( 2 > pStmt->m_uRecNo ) && pStmt->m_pBindRec ) {
 
         nRet = SQL_ERROR;
         strcpy( pStmt->m_szErrMsg, "FAILED TO EXTRACT " );
