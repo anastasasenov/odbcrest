@@ -1,6 +1,6 @@
 # odbcrest
 
-A lightweight, high-performance ODBC-like driver/interface built in C11 to bridge SQL applications with RESTL API data sources. This project allows developers to query variety data using standard SQL syntax. This ODBC driver is experimental and read-only. You can only execute queries.
+A lightweight, high-performance ODBC-like driver/interface built in C11 to bridge SQL applications with REST API data sources. This project allows developers to query variety data using standard SQL syntax. This ODBC driver is experimental and read-only. You can only execute queries.
 
 ## Features
 
